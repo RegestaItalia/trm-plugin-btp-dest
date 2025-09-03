@@ -1,5 +1,7 @@
 import axios from "axios";
-import { Logger } from "trm-commons";
+import { getCommons } from "./commons";
+
+const Commons = getCommons();
 
 export class BTP {
 
@@ -20,7 +22,7 @@ export class BTP {
                 'x-cpcli-format': 'json'
             };
         } catch (e) {
-            Logger.error(e.toString(), true);
+            Commons.Logger.error(e.toString(), true);
             throw new Error(`BTP Login failed.`);
         }
     }

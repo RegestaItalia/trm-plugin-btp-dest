@@ -2,7 +2,7 @@ import type { Login, RESTConnection } from 'trm-core';
 import { getCore } from './core';
 import { CfClient } from './CfClient';
 
-const Base = getCore().RESTSystemConnector;
+const Core = getCore().RESTSystemConnector;
 
 export interface BtpConnection extends RESTConnection {
     vcapServices: string,
@@ -12,7 +12,7 @@ export interface BtpConnection extends RESTConnection {
     cfRefreshToken: string
 }
 
-export class BtpSystemConnector extends Base {
+export class BtpSystemConnector extends Core {
 
     constructor(private _btpConnection: BtpConnection, private _destinationLogin: Login) {
         super({..._btpConnection, ...{ endpoint: '' }} as RESTConnection, _destinationLogin, false);

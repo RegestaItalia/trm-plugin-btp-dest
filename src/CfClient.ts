@@ -2,14 +2,17 @@ import { Client as SSHClient } from "ssh2";
 import net from "node:net";
 import { Logger } from "trm-commons";
 import { getSapCfAxiosInstance } from "sap-cf-axios";
-import { getAxiosInstance, Login, RESTClient, RFCDEST } from "trm-core";
 import { BtpConnection } from "./BTPSystemConnector";
 import { CF } from "./CF";
+import { getCore } from './core';
+import type { Login, RFCDEST } from "trm-core";
+
+const Core = getCore();
 
 const AXIOS_CTX = "RestServer";
 type Forward = { localPort: number; remoteHost: string; remotePort: number; localHost?: string };
 
-export class CfClient extends RESTClient {
+export class CfClient extends Core.RESTClient {
 
     private _cf: CF;
 
@@ -147,7 +150,7 @@ export class CfClient extends RESTClient {
             request.url = `${this.endpoint}${request.url}`;
             return request;
         })
-        this._axiosInstance = getAxiosInstance({}, AXIOS_CTX, client);
+        this._axiosInstance = Core.getAxiosInstance({}, AXIOS_CTX, client);
     }
 
     public async closeTunnel() {

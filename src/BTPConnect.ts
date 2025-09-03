@@ -1,8 +1,11 @@
-import { Inquirer, Logger, IConnect } from "trm-commons";
-import { ISystemConnector } from "trm-core";
+import type { IConnect } from "trm-commons";
+import type { ISystemConnector } from "trm-core";
 import { BtpSystemConnector } from "./BTPSystemConnector";
 import { BTP } from "./BTP";
 import { CF } from "./CF";
+import { getCommons } from "./commons";
+
+const Commons = getCommons();
 
 export class BTPConnect implements IConnect {
 
@@ -20,7 +23,7 @@ export class BTPConnect implements IConnect {
     private _cfRefreshToken: string;
 
     public async onConnectionData(): Promise<void> {
-        const btpLoginData = await Inquirer.prompt([{
+        const btpLoginData = await Commons.Inquirer.prompt([{
             type: `input`,
             name: `email`,
             message: `BTP Login: Email`
@@ -32,12 +35,12 @@ export class BTPConnect implements IConnect {
         }]);
 
         this._btp = new BTP(btpLoginData.email, btpLoginData.password);
-        Logger.loading(`Logging into BTP...`);
+        Commons.Logger.loading(`Logging into BTP...`);
         await this._btp.login();
 
-        Logger.loading(`Reading BTP global accounts...`);
+        Commons.Logger.loading(`Reading BTP global accounts...`);
         const btpGlobalAccounts = await this._btp.getBtpGlobalAccounts();
-        const btpGlobalAccount = (await Inquirer.prompt({
+        const btpGlobalAccount = (await Commons.Inquirer.prompt({
             name: 'subdomain',
             message: 'Choose global account',
             type: "list",
@@ -57,9 +60,9 @@ export class BTPConnect implements IConnect {
         })).subdomain;
         await this._btp.setBtpGlobalAccount(btpGlobalAccount);
 
-        Logger.loading(`Reading BTP sub accounts...`);
+        Commons.Logger.loading(`Reading BTP sub accounts...`);
         const btpSubAccounts = await this._btp.getBtpSubAccounts();
-        const btpSubAccount = (await Inquirer.prompt({
+        const btpSubAccount = (await Commons.Inquirer.prompt({
             name: 'subaccount',
             message: 'Choose sub account',
             type: "list",
@@ -80,11 +83,11 @@ export class BTPConnect implements IConnect {
 
         this._cfRegion = btpSubAccount.region;
         this._cf = CF.fromLogin(btpLoginData.email, btpLoginData.password, this._cfRegion);
-        Logger.loading(`Logging into Cloud Foundry...`);
+        Commons.Logger.loading(`Logging into Cloud Foundry...`);
         await this._cf.login();
         this._cfRefreshToken = this._cf.getRefreshToken();
 
-        Logger.loading(`Searching trm-ssh instance...`);
+        Commons.Logger.loading(`Searching trm-ssh instance...`);
         const apps = await this._cf.getApps('trm-ssh');
         const sshApp = apps.length > 0 ? apps[0] : undefined;
         if (!sshApp) {
@@ -94,14 +97,14 @@ export class BTPConnect implements IConnect {
         const sshEnabled = await this._cf.isSshEnabled(this._appGuid);
         if (!sshEnabled.enabled) {
             if (sshEnabled.reason) {
-                Logger.warning(`trm-ssh: ${sshEnabled.reason}`);
+                Commons.Logger.warning(`trm-ssh: ${sshEnabled.reason}`);
             }
-            Logger.error(`Ssh is not enabled on app "trm-ssh".`);
+            Commons.Logger.error(`Ssh is not enabled on app "trm-ssh".`);
             throw new Error(`Enable ssh and restart on app "trm-ssh".`);
         }
 
         try {
-            Logger.loading(`trm-ssh running, reading data...`);
+            Commons.Logger.loading(`trm-ssh running, reading data...`);
             const appEnv = await this._cf.getAppEnv(this._appGuid);
             this._vcapServices = appEnv.system_env_json['VCAP_SERVICES'];
             if (!this._vcapServices.destination[0]) {
@@ -111,9 +114,9 @@ export class BTPConnect implements IConnect {
             throw new Error(`Couldn't read trm-ssh environment`);
         }
 
-        Logger.loading(`Reading destinations...`);
+        Commons.Logger.loading(`Reading destinations...`);
         const destinations = (await this._cf.getDestinations(this._vcapServices.destination[0])).filter(o => o.ProxyType === 'OnPremise');
-        this._destination = (await Inquirer.prompt({
+        this._destination = (await Commons.Inquirer.prompt({
             message: `Choose destination`,
             name: 'destination',
             type: "list",
