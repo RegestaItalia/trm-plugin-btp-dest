@@ -1,6 +1,6 @@
 {
   "name": "trm-plugin-btp-dest",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Connect TRM to BTP destination via Cloud Foundry",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
