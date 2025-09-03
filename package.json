@@ -1,0 +1,49 @@
+{
+  "name": "trm-plugin-btp-dest",
+  "version": "1.0.0",
+  "description": "Connect TRM to BTP destination via Cloud Foundry",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "changelog.txt",
+    "dist",
+    "!dist/test.js",
+    "!dist/test.js.map",
+    "!dist/test.d.ts",
+    "!dist/.env",
+    "!dist/dev_rfc.log"
+  ],
+  "scripts": {
+    "cleanBuild": "rimraf dist/",
+    "build": "npm run cleanBuild && tsc --sourceMap false",
+    "test": "jest",
+    "prepublishOnly": "npm run build"
+  },
+  "author": {
+    "name": "Simone Gaffurini",
+    "email": "simone.gaffurini@regestaitalia.it"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@sap-cloud-sdk/connectivity": "^4.1.1",
+    "axios": "^1.11.0",
+    "sap-cf-axios": "^1.0.2",
+    "ssh2": "^1.17.0"
+  },
+  "peerDependencies": {
+    "trm-commons": "^3.2.0",
+    "trm-core": "^7.5.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.4.4",
+    "@types/ssh2": "^1.15.5",
+    "rimraf": "^6.0.1",
+    "trm-commons": "^3.2.0",
+    "trm-core": "^7.5.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.2"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}
