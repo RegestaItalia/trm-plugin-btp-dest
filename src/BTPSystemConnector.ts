@@ -1,4 +1,4 @@
-import type { Login, RESTConnection } from './core';
+import type { Login, RESTConnection } from 'trm-core';
 import { getCore } from './core';
 import { CfClient } from './CfClient';
 
