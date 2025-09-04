@@ -137,7 +137,7 @@ export class BTPConnect implements IConnect {
     }
 
     public getSystemConnector(): ISystemConnector {
-        return new BtpSystemConnector(this.getData(), { ...this.getData(), ...{ client: '100', user: 'destination user', passwd: 'destination password', lang: 'EN' } });
+        return new BtpSystemConnector(this.getData(), { ...this.getData(), ...{ client: '000', user: this._destination.Name, passwd: 'INITIAL', lang: 'EN' } });
     }
 
     public setData(data: any): void {
@@ -157,5 +157,18 @@ export class BTPConnect implements IConnect {
             cfRefreshToken: this._cfRefreshToken
         };
     }
+
+    public logData(): void {
+        if(this._destination.Name){
+            Commons.Logger.info(`Destination: ${this._destination.Name}`);
+        }else{
+            Commons.Logger.warning(`Destination: Unknown`);
+        }
+        if(this._cfRegion){
+            Commons.Logger.info(`Cloud Foundry region: ${this._cfRegion}`);
+        }else{
+            Commons.Logger.warning(`Cloud Foundry region: Unknown`);
+        }
+    };
 
 }

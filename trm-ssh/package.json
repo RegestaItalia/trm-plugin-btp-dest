@@ -1,0 +1,45 @@
+{
+  "name": "sap-cf-proxy",
+  "version": "0.0.1",
+  "description": "Proxy all destinations in SAP BTP Cloud foundry account",
+  "main": "index.js",
+  "engines": {
+    "node": "^20"
+  },
+  "config": {
+    "proxy": "connectivityproxy.internal.cf.eu10.hana.ondemand.com"
+  },
+  "scripts": {
+    "start": "node dist/proxy/index.js",
+    "build": "run-s build:tsc build:ssh",
+    "build:tsc": "tsc",
+    "build:ssh": "copyfiles -f src/ssh/*.json dist/ssh",
+    "build:mta": "mbt build",
+    "deploy:cf": "cross-var cf deploy mta_archives/trm-proxy_$npm_package_version.mtar"
+  },
+  "author": "Joachim Van Praet",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@sap-cloud-sdk/core": "^1.54.2",
+    "@sap/xsenv": "^5.2.0",
+    "axios": "^1.7.4",
+    "client-oauth2": "^4.3.3",
+    "dotenv": "^16.4.5",
+    "http": "0.0.1-security",
+    "http-proxy": "^1.18.1",
+    "pino": "^8.7.0",
+    "sap-cf-destconn": "0.0.38",
+    "typescript": "^5.5.4"
+  },
+  "devDependencies": {
+    "@types/http-proxy": "^1.17.15",
+    "@types/node": "^20",
+    "@types/pino": "^7.0.5",
+    "@types/sap__xsenv": "^3.3.2",
+    "copyfiles": "^2.4.1",
+    "cross-var": "^1.1.0",
+    "npm-run-all": "^4.1.5",
+    "pino-pretty": "^9.4.1",
+    "commit-and-tag-version": "^11.3.0"
+  }
+}

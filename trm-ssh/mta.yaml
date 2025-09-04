@@ -1,0 +1,42 @@
+ID: trm-proxy
+_schema-version: 3.2.0
+description: TRM Destination proxy
+version: 0.0.1
+parameters:
+  enable-parallel-deployments: true
+build-parameters:
+  before-all:
+   - builder: custom
+     commands:
+      - npm install
+      - npm run build
+
+modules:
+  - name: trm-ssh
+    type: nodejs
+    path: dist/ssh
+    build-parameters:
+      builder: custom
+      commands:
+        - npm install
+    parameters:
+      disk-quota: 256M
+      memory: 128M
+    requires:
+      - name: trm-destination
+      - name: trm-uaa
+      - name: trm-connectivity
+resources:
+  - name: trm-destination
+    type: destination
+    parameters:
+      service-plan: lite
+      service: destination
+  - name: trm-connectivity
+    type: connectivity
+  - name: trm-uaa
+    type: org.cloudfoundry.managed-service
+    parameters:
+      path: ./xs-security.json
+      service-plan: application
+      service: xsuaa

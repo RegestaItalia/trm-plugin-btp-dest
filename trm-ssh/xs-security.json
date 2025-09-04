@@ -1,0 +1,13 @@
+{
+  "xsappname": "trm-ssh",
+  "tenant-mode": "dedicated",
+  "description": "TRM SSH for destination proxy",
+  "scopes": [ ],
+  "role-templates": [ ],
+  "oauth2-configuration": {
+    "redirect-uris": [
+      "https://*.cfapps.us10.hana.ondemand.com/**",
+			"http://localhost:*/**"
+    ]
+  }
+}
