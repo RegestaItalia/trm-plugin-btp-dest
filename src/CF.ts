@@ -55,19 +55,15 @@ export class CF {
         if (!this._refreshToken) {
             throw new Error(`Missing refresh token!`);
         }
-        try {
-            return (await axios.post(`${this._loginEndpoint}/oauth/token`, new URLSearchParams({
-                grant_type: "refresh_token",
-                refresh_token: this._refreshToken
-            }), {
-                headers: {
-                    "Content-Type": "application/x-www-form-urlencoded",
-                    "Authorization": "Basic " + Buffer.from("cf:").toString("base64"),
-                }
-            })).data;
-        } catch (e) {
-            throw new Error(`Cloud Foundry login failed.`);
-        }
+        return (await axios.post(`${this._loginEndpoint}/oauth/token`, new URLSearchParams({
+            grant_type: "refresh_token",
+            refresh_token: this._refreshToken
+        }), {
+            headers: {
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Authorization": "Basic " + Buffer.from("cf:").toString("base64"),
+            }
+        })).data;
     }
 
     public async login(): Promise<void> {

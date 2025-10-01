@@ -4,6 +4,8 @@ import { BtpSystemConnector } from "./BTPSystemConnector";
 import { BTP } from "./BTP";
 import { CF } from "./CF";
 import { getCommons } from "./commons";
+import { promptLogin } from "./promptLogin";
+import { AxiosError } from "axios";
 
 const Commons = getCommons();
 
@@ -23,16 +25,7 @@ export class BTPConnect implements IConnect {
     private _cfRefreshToken: string;
 
     public async onConnectionData(): Promise<void> {
-        const btpLoginData = await Commons.Inquirer.prompt([{
-            type: `input`,
-            name: `email`,
-            message: `BTP Login: Email`
-        },
-        {
-            type: `password`,
-            name: `password`,
-            message: `BTP Login: Password`
-        }]);
+        const btpLoginData = await promptLogin();
 
         this._btp = new BTP(btpLoginData.email, btpLoginData.password);
         Commons.Logger.loading(`Logging into BTP...`);
@@ -134,6 +127,35 @@ export class BTPConnect implements IConnect {
                 }
             })
         })).destination;
+    }
+
+    public async onAfterLoginData(force: boolean, commandArgs?: any):  Promise<void>{
+        if(!this._cf){
+            this._cf = CF.fromRefreshToken(this._cfRegion, this._cfRefreshToken);
+        }
+        try{
+            await this._cf.login();
+        }catch(e){
+            var throwError = true;
+            if(e instanceof AxiosError){
+                if(e.response && e.response.data){
+                    if(e.status === 401 && e.response.data.error === 'invalid_token'){
+                        // refresh token expired?
+                        Commons.Logger.warning(`Cloud foundry token expired!`);
+                        const loginData = await promptLogin();
+                        this._cf = CF.fromLogin(loginData.email, loginData.password, this._cfRegion);
+                        await this._cf.login();
+                        this._cfRefreshToken = this._cf.getRefreshToken();
+                        throwError = false;
+                    }else{
+                        throw new Error(e.response.data.error_description || 'Unknown error from Cloud Foundry');
+                    }
+                }
+            }
+            if(throwError){
+                throw e;
+            }
+        }
     }
 
     public getSystemConnector(): ISystemConnector {
