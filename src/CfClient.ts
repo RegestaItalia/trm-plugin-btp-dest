@@ -14,8 +14,8 @@ type Forward = { localPort: number; remoteHost: string; remotePort: number; loca
 
 export class CfClient extends Core.RESTClient {
 
+    private _canOpen: boolean = true;
     private _cf: CF;
-
     private _vcapServices: any;
     private _remoteHost: string;
     private _sshUsername: string;
@@ -123,34 +123,37 @@ export class CfClient extends Core.RESTClient {
     }
 
     public async open() {
-        this._vcapServices.connectivity[0].credentials.onpremise_proxy_host = "localhost";
-        if ("onpremise_proxy_http_host" in this._vcapServices.connectivity[0].credentials) {
-            this._vcapServices.connectivity[0].credentials.onpremise_proxy_http_host = "localhost";
-        }
-        (this._vcapServices.connectivity[0].credentials as any).onpremise_socks5_proxy_host = "localhost";
-        process.env.VCAP_SERVICES = JSON.stringify(this._vcapServices);
+        if (this._canOpen) {
+            this._vcapServices.connectivity[0].credentials.onpremise_proxy_host = "localhost";
+            if ("onpremise_proxy_http_host" in this._vcapServices.connectivity[0].credentials) {
+                this._vcapServices.connectivity[0].credentials.onpremise_proxy_http_host = "localhost";
+            }
+            (this._vcapServices.connectivity[0].credentials as any).onpremise_socks5_proxy_host = "localhost";
+            process.env.VCAP_SERVICES = JSON.stringify(this._vcapServices);
 
-        Logger.loading(`Authenticating ssh tunnel...`);
-        const sshPassword = await this.getSshPassword();
-        Logger.loading(`Opening ssh tunnel...`);
-        const sshConnectionData = await this.getSshConnectionData();
-        ({ conn: this._sshClient, servers: this._servers } = await this.openTunnel(sshConnectionData.host, sshConnectionData.port, this._sshUsername, sshPassword, [{
-            localPort: 20003,
-            remoteHost: this._remoteHost,
-            remotePort: 20003
-        }, {
-            localPort: 20004,
-            remoteHost: this._remoteHost,
-            remotePort: 20004
-        }]
-        ));
-        Logger.success(`Ssh tunnel OK!`);
-        const client = getSapCfAxiosInstance(this._btpConnection.btpDestinationName);
-        client.interceptors.request.use((request) => {
-            request.url = `${this.endpoint}${request.url}`;
-            return request;
-        })
-        this._axiosInstance = Core.getAxiosInstance({}, AXIOS_CTX, client);
+            Logger.loading(`Authenticating ssh tunnel...`);
+            const sshPassword = await this.getSshPassword();
+            Logger.loading(`Opening ssh tunnel...`);
+            const sshConnectionData = await this.getSshConnectionData();
+            ({ conn: this._sshClient, servers: this._servers } = await this.openTunnel(sshConnectionData.host, sshConnectionData.port, this._sshUsername, sshPassword, [{
+                localPort: 20003,
+                remoteHost: this._remoteHost,
+                remotePort: 20003
+            }, {
+                localPort: 20004,
+                remoteHost: this._remoteHost,
+                remotePort: 20004
+            }]
+            ));
+            Logger.success(`Ssh tunnel OK!`);
+            const client = getSapCfAxiosInstance(this._btpConnection.btpDestinationName);
+            client.interceptors.request.use((request) => {
+                request.url = `${this.endpoint}${request.url}`;
+                return request;
+            })
+            this._axiosInstance = Core.getAxiosInstance({}, AXIOS_CTX, client);
+            this._canOpen = false;
+        }
     }
 
     public async closeTunnel() {
@@ -160,6 +163,7 @@ export class CfClient extends Core.RESTClient {
         if (this._sshClient) {
             this._sshClient.end();
         }
+        this._canOpen = true;
     }
 
 }
