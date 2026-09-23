@@ -3,7 +3,7 @@ import type { ISystemConnector } from "trm-core";
 import { BTP } from "./BTP";
 import { CF } from "./CF";
 import { getCommons } from "./commons";
-import { promptLogin } from "./promptLogin";
+import { promptLogin, type LoginData } from "./promptLogin";
 import { CfRefreshTokenExpiredError } from "./errors";
 
 const SSH_APP_NAME = 'trm-ssh';
@@ -12,11 +12,19 @@ const SSH_APP_NAME = 'trm-ssh';
 export type BTPConnectArgs = {
     btpEmail?: string,
     btpPassword?: string,
+    btpPassport?: string,
+    btpPassportPassphrase?: string,
     btpGlobalAccount?: string,
     btpSubaccount?: string,
     cfRegion?: string,
     btpDestination?: string,
     forwardRfcDest?: string
+};
+
+// arguments that can also be set with an environment variable (connection arguments win)
+const ENV_ARGS: { [name in keyof BTPConnectArgs]?: string } = {
+    btpPassport: 'TRM_SAP_PASSPORT',
+    btpPassportPassphrase: 'TRM_SAP_PASSPORT_PASSPHRASE'
 };
 
 export class BTPConnect implements IConnect {
@@ -27,6 +35,8 @@ export class BTPConnect implements IConnect {
     connectionArgs = [
         { name: 'btpEmail', description: 'BTP user email.' },
         { name: 'btpPassword', description: 'BTP user password.', secret: true },
+        { name: 'btpPassport', description: `SAP Passport (.pfx) file path or base64 content, replaces email and password (env ${ENV_ARGS.btpPassport}).`, secret: true },
+        { name: 'btpPassportPassphrase', description: `SAP Passport passphrase (env ${ENV_ARGS.btpPassportPassphrase}).`, secret: true },
         { name: 'btpGlobalAccount', description: 'BTP global account (subdomain or display name).' },
         { name: 'btpSubaccount', description: 'BTP subaccount (subdomain, id, technical name or display name).' },
         { name: 'cfRegion', description: 'Cloud Foundry region (e.g. eu10), skips global account and subaccount selection.' },
@@ -46,12 +56,13 @@ export class BTPConnect implements IConnect {
 
     private getArgs(force: boolean, commandArgs?: any): BTPConnectArgs {
         // force: ask everything again
-        if (force || !commandArgs) {
+        if (force) {
             return {};
         }
         const args: BTPConnectArgs = {};
         this.connectionArgs.forEach(o => {
-            const value = commandArgs[o.name];
+            const envName = ENV_ARGS[o.name as keyof BTPConnectArgs];
+            const value = commandArgs?.[o.name] ?? (envName ? process.env[envName] : undefined);
             if (typeof value === 'string' || typeof value === 'number') {
                 if (`${value}`.trim() === '') return;
                 args[o.name as keyof BTPConnectArgs] = `${value}`.trim();
@@ -129,12 +140,12 @@ export class BTPConnect implements IConnect {
         })).subaccount;
     }
 
-    private async pickRegion(args: BTPConnectArgs, btpLoginData: { email: string, password: string }): Promise<string> {
+    private async pickRegion(args: BTPConnectArgs, btpLoginData: LoginData): Promise<string> {
         if (args.cfRegion) {
             return args.cfRegion;
         }
-        this._btp = new BTP(btpLoginData.email, btpLoginData.password);
-        getCommons().Logger.loading(`Logging into BTP...`);
+        this._btp = new BTP(btpLoginData);
+        getCommons().Logger.loading('passport' in btpLoginData ? `Logging into BTP with SAP Passport...` : `Logging into BTP...`);
         await this._btp.login();
 
         const btpGlobalAccount = await this.pickGlobalAccount(args);
@@ -184,10 +195,10 @@ export class BTPConnect implements IConnect {
     public async onConnectionData(force: boolean, commandArgs?: any): Promise<void> {
         const Commons = getCommons();
         const args = this.getArgs(force, commandArgs);
-        const btpLoginData = await promptLogin({ email: args.btpEmail, password: args.btpPassword });
+        const btpLoginData = await this.promptLogin(args);
 
         this._cfRegion = await this.pickRegion(args, btpLoginData);
-        this._cf = CF.fromLogin(btpLoginData.email, btpLoginData.password, this._cfRegion);
+        this._cf = BTPConnect.cfFromLogin(btpLoginData, this._cfRegion);
         Commons.Logger.loading(`Logging into Cloud Foundry (${this._cfRegion})...`);
         await this._cf.login();
         this._cfRefreshToken = this._cf.getRefreshToken();
@@ -258,14 +269,21 @@ export class BTPConnect implements IConnect {
                 throw e;
             }
             const args = this.getArgs(force, commandArgs);
-            if (!args.btpEmail || !args.btpPassword) {
+            if (!args.btpPassport && (!args.btpEmail || !args.btpPassword)) {
                 Commons.Logger.warning(`Cloud Foundry session expired, log into BTP again.`);
             }
-            const loginData = await promptLogin({ email: args.btpEmail, password: args.btpPassword });
-            this._cf = CF.fromLogin(loginData.email, loginData.password, this._cfRegion);
+            this._cf = BTPConnect.cfFromLogin(await this.promptLogin(args), this._cfRegion);
             await this._cf.login();
         }
         this._cfRefreshToken = this._cf.getRefreshToken();
+    }
+
+    private promptLogin(args: BTPConnectArgs): Promise<LoginData> {
+        return promptLogin({ email: args.btpEmail, password: args.btpPassword, passport: args.btpPassport, passportPassphrase: args.btpPassportPassphrase });
+    }
+
+    private static cfFromLogin(loginData: LoginData, region: string): CF {
+        return 'passport' in loginData ? CF.fromPassport(loginData.passport, region) : CF.fromLogin(loginData.email, loginData.password, region);
     }
 
     public getSystemConnector(): ISystemConnector {

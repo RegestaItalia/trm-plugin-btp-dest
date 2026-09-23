@@ -2,6 +2,7 @@ import axios, { isAxiosError } from "axios";
 import { serviceToken } from "@sap-cloud-sdk/connectivity";
 import { CfRefreshTokenExpiredError, getErrorReason, getHttpStatus } from "./errors";
 import { getCommons } from "./commons";
+import type { SapPassport } from "./SapPassport";
 
 export class CF {
 
@@ -13,6 +14,8 @@ export class CF {
     protected _username?: string;
     protected _password?: string;
     protected _refreshToken?: string;
+    protected _passport?: SapPassport;
+    private _sessionExpiration?: Date;
 
     private constructor() { }
 
@@ -30,6 +33,14 @@ export class CF {
         var instance = new CF();
         instance._username = username;
         instance._password = password;
+        instance._apiEndpoint = endpoints.apiEndpoint;
+        instance._loginEndpoint = endpoints.loginEndpoint;
+        return instance;
+    }
+    public static fromPassport(passport: SapPassport, region: string): CF {
+        const endpoints = CF.getEndpoints(region);
+        var instance = new CF();
+        instance._passport = passport;
         instance._apiEndpoint = endpoints.apiEndpoint;
         instance._loginEndpoint = endpoints.loginEndpoint;
         return instance;
@@ -54,6 +65,11 @@ export class CF {
         return this._cfInfo;
     }
 
+    // refresh token expiration (max session duration, refreshes don't extend it), undefined if unknown
+    public getSessionExpiration(): Date | undefined {
+        return this._sessionExpiration;
+    }
+
     // latest refresh token (the login server may rotate it on each refresh), undefined if never set
     public peekRefreshToken(): string | undefined {
         return this._refreshToken;
@@ -67,8 +83,12 @@ export class CF {
     }
 
     private async passwordLogin(): Promise<any> {
+        const passcode = this._passport ? await this.getPasscode(this._passport) : undefined;
         try {
-            return (await axios.post(`${this._loginEndpoint}/oauth/token`, new URLSearchParams({
+            return (await axios.post(`${this._loginEndpoint}/oauth/token`, new URLSearchParams(passcode ? {
+                grant_type: "password",
+                passcode
+            } : {
                 grant_type: "password",
                 username: this._username!,
                 password: this._password!
@@ -80,11 +100,25 @@ export class CF {
             })).data;
         } catch (e) {
             const status = getHttpStatus(e);
+            if (this._passport) {
+                throw new Error(`Cloud Foundry login with SAP Passport failed (${getErrorReason(e)}).`);
+            }
             if (status === 401 || status === 400) {
                 throw new Error(`Cloud Foundry login failed: invalid email or password, or user without access to Cloud Foundry (${getErrorReason(e)}).`);
             }
             throw new Error(`Cloud Foundry login failed (${getErrorReason(e)}).`);
         }
+    }
+
+    // same as "cf login --sso": one-time passcode, from a login server session opened with the SAP Passport
+    private async getPasscode(passport: SapPassport): Promise<string> {
+        passport.reset();
+        await passport.browse(`${this._loginEndpoint}/login?login_hint=${encodeURIComponent(JSON.stringify({ origin: 'sap.ids' }))}`);
+        const passcode = (await passport.browse(`${this._loginEndpoint}/passcode`)).body.match(/id=["']passcode["'][^>]*>\s*([^<\s]+)\s*</)?.[1];
+        if (!passcode) {
+            throw new Error(`Cloud Foundry login failed: SAP Passport not accepted by SAP ID service.`);
+        }
+        return passcode;
     }
 
     private async refreshLogin(): Promise<any> {
@@ -113,12 +147,23 @@ export class CF {
         if (this._loggedIn) {
             return;
         }
-        var cfLogin: any;
-        if (this._username && this._password) {
-            cfLogin = await this.passwordLogin();
+        if ((this._username && this._password) || this._passport) {
+            this.setLogin(await this.passwordLogin());
+            if (this._refreshToken && !this._sessionExpiration) {
+                // password grant (also with passcode) returns an opaque refresh token, refresh once to get a JWT one (with its expiration)
+                try {
+                    this.setLogin(await this.refreshLogin());
+                } catch (e) {
+                    getCommons().Logger.log(`Couldn't read Cloud Foundry session expiration (${getErrorReason(e)}).`, true);
+                }
+            }
         } else {
-            cfLogin = await this.refreshLogin();
+            this.setLogin(await this.refreshLogin());
         }
+        this._loggedIn = true;
+    }
+
+    private setLogin(cfLogin: any): void {
         if (!cfLogin?.access_token) {
             throw new Error(`Cloud Foundry login failed: no access token returned.`);
         }
@@ -127,12 +172,8 @@ export class CF {
         };
         if (cfLogin.refresh_token) {
             this._refreshToken = cfLogin.refresh_token;
-            const expiration = CF.getTokenExpiration(cfLogin.refresh_token);
-            if (expiration) {
-                getCommons().Logger.info(`Cloud Foundry session valid until ${expiration.toLocaleString()}.`);
-            }
+            this._sessionExpiration = CF.getTokenExpiration(cfLogin.refresh_token);
         }
-        this._loggedIn = true;
     }
 
     // expiration of a JWT token (exp claim), undefined for opaque tokens
