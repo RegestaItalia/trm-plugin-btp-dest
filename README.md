@@ -72,10 +72,24 @@ Every prompt can be skipped by passing connection arguments from the TRM client:
 | ------------------ | ------------------------------------------------------------------------------------ |
 | `btpEmail`         | BTP user email                                                                       |
 | `btpPassword`      | BTP user password                                                                    |
+| `btpPassport`      | SAP Passport (`.pfx`) file path or base64 content, replaces `btpEmail` and `btpPassword` (env `TRM_SAP_PASSPORT`) |
+| `btpPassportPassphrase` | SAP Passport passphrase, prompted when missing (env `TRM_SAP_PASSPORT_PASSPHRASE`) |
 | `cfRegion`         | Cloud Foundry region (e.g. `eu10`); when set, global account and subaccount are skipped |
 | `btpGlobalAccount` | Global account subdomain or display name (only without `cfRegion`)                   |
 | `btpSubaccount`    | Subaccount subdomain, id, technical name or display name (only without `cfRegion`)   |
 | `btpDestination`   | Name of the destination (proxy type `OnPremise`)                                     |
 | `forwardRfcDest`   | RFC destination trm-rest forwards calls to, same as client option `-x <destination>`; prompted when missing, `NONE` when `--connection-type` is used |
 
-Arguments not provided are prompted as usual. In CI the user must be able to log in with email and password (no two-factor authentication).
+Arguments not provided are prompted as usual. In CI the user must be able to log in with email and password (no two-factor authentication), or with a SAP Passport.
+
+### SAP Passport
+
+A SAP Passport (client certificate issued by SAP, `.pfx`) can be used instead of email and password: when `btpPassport` is set, email and password are not asked and the login to BTP and Cloud Foundry is done with the certificate at the SAP ID service (same as `btp login --sso` and `cf login --sso` in a browser with the passport installed).
+
+```sh
+export TRM_SAP_PASSPORT=/path/to/passport.pfx   # or its base64 content, e.g. from a CI secret
+export TRM_SAP_PASSPORT_PASSPHRASE=...
+trm <command> --connection-type BTP --connection-args '{"cfRegion":"eu10","btpDestination":"MY_DEST"}'
+```
+
+The passport is never saved with the connection data: when the saved Cloud Foundry session expires, it is read again from the arguments/environment (or email and password are prompted).

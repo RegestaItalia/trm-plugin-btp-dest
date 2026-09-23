@@ -225,7 +225,11 @@ export class CfClient extends Core.RESTClient {
                     remoteHost,
                     remotePort: port
                 })));
-                Logger.success(`SSH tunnel OK!`);
+                Logger.success(`SSH tunnel OK!`, true);
+                const sessionExpiration = this._cf.getSessionExpiration();
+                if (sessionExpiration) {
+                    Logger.info(`Cloud Foundry session valid until ${sessionExpiration.toLocaleString()}.`);
+                }
 
                 // route connectivity proxy through the tunnel
                 credentials.onpremise_proxy_host = "localhost";
