@@ -23,6 +23,7 @@ export class CfClient extends Core.RESTClient {
     private _cf: CF;
     private _vcapServices: any;
     private _sshUsername: string;
+    private _timeout?: number;
 
     private _sshClient?: SSHClient;
     private _servers?: net.Server[];
@@ -32,6 +33,8 @@ export class CfClient extends Core.RESTClient {
         // reuse the connection session: refreshing twice may invalidate the saved refresh token
         this._cf = cf || CF.fromRefreshToken(this._btpConnection.cfRegion, this._btpConnection.cfRefreshToken);
         this._sshUsername = `cf:${this._btpConnection.guid}/0`;
+        // open() replaces the trm-core axios instance, keep its default timeout
+        this._timeout = this._axiosInstance.defaults.timeout;
     }
 
     private getConnectivityCredentials(): any {
@@ -163,7 +166,8 @@ export class CfClient extends Core.RESTClient {
 
     // requests go to the destination url through the connectivity proxy (tunnelled), destination and tokens are cached by the sdk
     private getDestinationAxiosInstance(destinationName: string): AxiosInstance {
-        const client = axios.create();
+        // same default timeout as trm-core, calls that set their own timeout (e.g. transport release) override it
+        const client = axios.create({ timeout: this._timeout });
         client.interceptors.request.use(async (request) => {
             var destination;
             try {
