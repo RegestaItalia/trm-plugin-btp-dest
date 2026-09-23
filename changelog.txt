@@ -1,0 +1,33 @@
+trm-plugin-btp-dest changelog
+=================
+
+Legend
+------
+* : fixed
+! : changed
++ : added
+- : removed
+
+2026-09-23 v2.0.0
+-------------------
+! trm-core >=9.10.6
+! trm-commons >=5.1.0
+! trm-core and trm-commons optional peer dependencies
+! typescript ^7.0.2, strict mode
+- sap-cf-axios dependency, destination requests via @sap-cloud-sdk/connectivity
++ connection arguments for non interactive connection (btpEmail, btpPassword, btpGlobalAccount, btpSubaccount, cfRegion, btpDestination, forwardRfcDest)
++ cfRegion argument skips BTP login, global account and subaccount selection
++ forward rfc destination prompt, saved with connection data
++ rotated Cloud Foundry refresh token saved in connection data
++ Cloud Foundry session expiration logged after login
++ trm-ssh checks: app running, connectivity and destination service bindings
++ connection check to trm-server after tunnel is opened
++ local port already in use error
++ unexpected ssh tunnel close warning
++ detailed error messages (HTTP status and server message)
+! Cloud Foundry session shared between connection and system connector
+! sap cloud sdk console logs limited to errors
+* tunnel closed when opening fails
+* connection re-opened after tunnel close
+* commons and core resolved lazily (after loadCore/loadCommons hooks)
+* invalid saved connection data handling
