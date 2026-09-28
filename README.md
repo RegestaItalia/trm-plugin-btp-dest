@@ -31,7 +31,10 @@ If your on-premise SAP system is already connected to SAP BTP through the **SAP 
  ┌──────────────────────────────── On-premise ─────────────────┐
  │  ┌──────────────────────┐  HTTP   ┌──────────────────────┐  │
  │  │ SAP Cloud Connector  │ ──────▶ │ SAP system           │  │
- │  └──────────────────────┘         │ + trm-server (REST)  │  │
+ │  └──────────────────────┘         │ trm-rest (REST API)  │  │
+ │                                   │     │                │  │
+ │                                   │     ▼                │  │
+ │                                   │ trm-server           │  │
  │                                   └──────────────────────┘  │
  └─────────────────────────────────────────────────────────────┘
 ```
@@ -39,8 +42,9 @@ If your on-premise SAP system is already connected to SAP BTP through the **SAP 
 1. The plugin logs into Cloud Foundry and looks for the **trm-ssh** app
 2. It opens an SSH tunnel to the app and forwards the Connectivity service proxy ports to the local machine
 3. TRM calls the SAP system through the chosen BTP destination (proxy type `OnPremise`); the Connectivity service and the Cloud Connector route each call to the on-premise system
+4. On the SAP system, **trm-rest** receives the HTTP calls
 
-The connection is currently **REST only** (HTTP through the destination, no RFC), so **trm-server must be installed on the target SAP system** to expose the REST endpoints TRM uses.
+The connection is currently **REST only** (HTTP through the destination, no RFC).
 
 ## Requirements
 
@@ -48,7 +52,7 @@ The connection is currently **REST only** (HTTP through the destination, no RFC)
 - [cf CLI](https://docs.cloudfoundry.org/cf-cli/): used to deploy the SSH enabler app
 - SAP Cloud Connector connecting the on-premise SAP system to the BTP subaccount
 - A BTP destination (proxy type `OnPremise`) pointing to the SAP system
-- trm-server installed on the target SAP system
+- trm-server and trm-rest installed on the target SAP system
 
 ## Deploy SSH enabler app
 
