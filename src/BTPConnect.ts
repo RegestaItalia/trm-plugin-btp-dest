@@ -54,9 +54,18 @@ export class BTPConnect implements IConnect {
     private _cfRefreshToken!: string;
     private _rfcdest: string = 'NONE';
 
+    // the client passes its options with the connection arguments: --no-prompts sets prompts to false
+    private static isInteractive(commandArgs?: any): boolean {
+        return commandArgs?.prompts !== false;
+    }
+
+    private static missingArgError(what: string, args: string): Error {
+        return new Error(`${what} is required when interactive prompts are disabled (--no-prompts): pass ${args} in --connection-args (or TRM_CONNECTION_ARGS).`);
+    }
+
     private getArgs(force: boolean, commandArgs?: any): BTPConnectArgs {
-        // force: ask everything again
-        if (force) {
+        // force: ask everything again (not possible without prompts)
+        if (force && BTPConnect.isInteractive(commandArgs)) {
             return {};
         }
         const args: BTPConnectArgs = {};
@@ -71,7 +80,7 @@ export class BTPConnect implements IConnect {
         return args;
     }
 
-    private async pickGlobalAccount(args: BTPConnectArgs): Promise<string> {
+    private async pickGlobalAccount(args: BTPConnectArgs, interactive: boolean): Promise<string> {
         const Commons = getCommons();
         Commons.Logger.loading(`Reading BTP global accounts...`);
         const btpGlobalAccounts = await this._btp.getBtpGlobalAccounts();
@@ -84,6 +93,9 @@ export class BTPConnect implements IConnect {
                 throw new Error(`BTP global account "${args.btpGlobalAccount}" not found. Available: ${btpGlobalAccounts.map(o => o.subdomain).join(', ')}.`);
             }
             return match.subdomain;
+        }
+        if (!interactive) {
+            throw BTPConnect.missingArgError(`BTP global account`, `"cfRegion" (or "btpGlobalAccount" and "btpSubaccount")`);
         }
         return (await Commons.Inquirer.prompt({
             name: 'subdomain',
@@ -105,7 +117,7 @@ export class BTPConnect implements IConnect {
         })).subdomain;
     }
 
-    private async pickSubaccount(args: BTPConnectArgs, btpGlobalAccount: string): Promise<any> {
+    private async pickSubaccount(args: BTPConnectArgs, btpGlobalAccount: string, interactive: boolean): Promise<any> {
         const Commons = getCommons();
         Commons.Logger.loading(`Reading BTP subaccounts...`);
         const btpSubAccounts = await this._btp.getBtpSubAccounts();
@@ -119,6 +131,9 @@ export class BTPConnect implements IConnect {
                 throw new Error(`BTP subaccount "${key}" not found in global account "${btpGlobalAccount}". Available: ${btpSubAccounts.map(o => o.subdomain || o.technicalName).join(', ')}.`);
             }
             return match;
+        }
+        if (!interactive) {
+            throw BTPConnect.missingArgError(`BTP subaccount`, `"cfRegion" (or "btpSubaccount")`);
         }
         return (await Commons.Inquirer.prompt({
             name: 'subaccount',
@@ -140,7 +155,7 @@ export class BTPConnect implements IConnect {
         })).subaccount;
     }
 
-    private async pickRegion(args: BTPConnectArgs, btpLoginData: LoginData): Promise<string> {
+    private async pickRegion(args: BTPConnectArgs, btpLoginData: LoginData, interactive: boolean): Promise<string> {
         if (args.cfRegion) {
             return args.cfRegion;
         }
@@ -148,17 +163,17 @@ export class BTPConnect implements IConnect {
         getCommons().Logger.loading('passport' in btpLoginData ? `Logging into BTP with SAP Passport...` : `Logging into BTP...`);
         await this._btp.login();
 
-        const btpGlobalAccount = await this.pickGlobalAccount(args);
+        const btpGlobalAccount = await this.pickGlobalAccount(args, interactive);
         await this._btp.setBtpGlobalAccount(btpGlobalAccount);
 
-        const btpSubAccount = await this.pickSubaccount(args, btpGlobalAccount);
+        const btpSubAccount = await this.pickSubaccount(args, btpGlobalAccount, interactive);
         if (!btpSubAccount.region) {
             throw new Error(`Couldn't determine the region of subaccount "${btpSubAccount.displayName || btpSubAccount.technicalName}".`);
         }
         return btpSubAccount.region;
     }
 
-    private async pickDestination(cf: CF, args: BTPConnectArgs): Promise<any> {
+    private async pickDestination(cf: CF, args: BTPConnectArgs, interactive: boolean): Promise<any> {
         const Commons = getCommons();
         Commons.Logger.loading(`Reading destinations...`);
         const destinations = (await cf.getDestinations(this._vcapServices.destination[0])).filter(o => o.ProxyType === 'OnPremise');
@@ -171,6 +186,9 @@ export class BTPConnect implements IConnect {
         }
         if (destinations.length === 0) {
             throw new Error(`No destination with proxy type "OnPremise" found in the subaccount.`);
+        }
+        if (!interactive) {
+            throw BTPConnect.missingArgError(`BTP destination`, `"btpDestination"`);
         }
         return (await Commons.Inquirer.prompt({
             message: `Choose destination`,
@@ -195,9 +213,10 @@ export class BTPConnect implements IConnect {
     public async onConnectionData(force: boolean, commandArgs?: any): Promise<void> {
         const Commons = getCommons();
         const args = this.getArgs(force, commandArgs);
-        const btpLoginData = await this.promptLogin(args);
+        const interactive = BTPConnect.isInteractive(commandArgs);
+        const btpLoginData = await this.promptLogin(args, interactive);
 
-        this._cfRegion = await this.pickRegion(args, btpLoginData);
+        this._cfRegion = await this.pickRegion(args, btpLoginData, interactive);
         this._cf = BTPConnect.cfFromLogin(btpLoginData, this._cfRegion);
         Commons.Logger.loading(`Logging into Cloud Foundry (${this._cfRegion})...`);
         await this._cf.login();
@@ -234,16 +253,17 @@ export class BTPConnect implements IConnect {
             throw new Error(`Connectivity service binding not found on app "${SSH_APP_NAME}". Bind a Connectivity service instance to it and restage.`);
         }
 
-        this._destination = await this.pickDestination(this._cf, args);
+        this._destination = await this.pickDestination(this._cf, args, interactive);
         this._rfcdest = await this.pickForwardRfcDest(force, commandArgs);
     }
 
     // same rules as the REST connection: provided (string) = use it, otherwise prompt (default saved rfcdest or NONE)
+    // without prompts the default is used
     private async pickForwardRfcDest(force: boolean, commandArgs?: any): Promise<string> {
         const forwardRfcDest = commandArgs?.forwardRfcDest;
         const preset: string = typeof forwardRfcDest === 'string' && forwardRfcDest.trim() ? forwardRfcDest : (this._rfcdest || 'NONE');
         var value = preset;
-        if (!(typeof forwardRfcDest === 'string' && forwardRfcDest.trim()) || force) {
+        if (BTPConnect.isInteractive(commandArgs) && (!(typeof forwardRfcDest === 'string' && forwardRfcDest.trim()) || force)) {
             value = (await getCommons().Inquirer.prompt({
                 type: `input`,
                 name: `rfcdest`,
@@ -269,17 +289,21 @@ export class BTPConnect implements IConnect {
                 throw e;
             }
             const args = this.getArgs(force, commandArgs);
-            if (!args.btpPassport && (!args.btpEmail || !args.btpPassword)) {
+            const interactive = BTPConnect.isInteractive(commandArgs);
+            if (interactive && !args.btpPassport && (!args.btpEmail || !args.btpPassword)) {
                 Commons.Logger.warning(`Cloud Foundry session expired, log into BTP again.`);
             }
-            this._cf = BTPConnect.cfFromLogin(await this.promptLogin(args), this._cfRegion);
+            this._cf = BTPConnect.cfFromLogin(await this.promptLogin(args, interactive), this._cfRegion);
             await this._cf.login();
         }
         this._cfRefreshToken = this._cf.getRefreshToken();
     }
 
-    private promptLogin(args: BTPConnectArgs): Promise<LoginData> {
-        return promptLogin({ email: args.btpEmail, password: args.btpPassword, passport: args.btpPassport, passportPassphrase: args.btpPassportPassphrase });
+    private promptLogin(args: BTPConnectArgs, interactive: boolean): Promise<LoginData> {
+        if (!interactive && !args.btpPassport && (!args.btpEmail || !args.btpPassword)) {
+            throw BTPConnect.missingArgError(`BTP login`, `"btpEmail" and "btpPassword" (or "btpPassport", env ${ENV_ARGS.btpPassport})`);
+        }
+        return promptLogin({ email: args.btpEmail, password: args.btpPassword, passport: args.btpPassport, passportPassphrase: args.btpPassportPassphrase }, interactive);
     }
 
     private static cfFromLogin(loginData: LoginData, region: string): CF {

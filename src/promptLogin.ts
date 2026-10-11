@@ -4,9 +4,10 @@ import { SapPassport } from "./SapPassport";
 export type LoginData = { email: string, password: string } | { passport: SapPassport };
 
 // prompts only for the values not already provided, with a SAP Passport email and password are not needed
-export async function promptLogin(provided: { email?: string, password?: string, passport?: string, passportPassphrase?: string } = {}): Promise<LoginData> {
+// not interactive: nothing is prompted (a missing passport passphrase means a passport without passphrase)
+export async function promptLogin(provided: { email?: string, password?: string, passport?: string, passportPassphrase?: string } = {}, interactive: boolean = true): Promise<LoginData> {
     const passport = provided.passport;
-    const answers = await getCommons().Inquirer.prompt([{
+    const answers = !interactive ? {} : await getCommons().Inquirer.prompt([{
         type: `input`,
         name: `email`,
         message: `BTP Login: Email`,
