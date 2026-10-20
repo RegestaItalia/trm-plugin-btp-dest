@@ -1,0 +1,70 @@
+name: Sync README to trm-docs
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - README.md
+      - "**/*.avif"
+      - "**/*.gif"
+      - "**/*.jpeg"
+      - "**/*.jpg"
+      - "**/*.png"
+      - "**/*.svg"
+      - "**/*.webp"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-btp-destination-docs
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Sync BTP destination documentation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out BTP destination plugin
+        uses: actions/checkout@v7
+        with:
+          path: trm-plugin-btp-dest
+          persist-credentials: false
+
+      - name: Check out trm-docs
+        uses: actions/checkout@v7
+        with:
+          repository: RegestaItalia/trm-docs
+          ref: main
+          ssh-key: ${{ secrets.TRM_DOCS_SYNC_SSH_KEY }}
+          path: trm-docs
+          fetch-depth: 0
+
+      - name: Update marked documentation section
+        run: |
+          python3 trm-plugin-btp-dest/scripts/sync_readme_to_docs.py \
+            trm-plugin-btp-dest/README.md \
+            trm-docs/docs/client/btp_destination.md \
+            trm-docs/docs/client/assets/btp_destination
+
+      - name: Commit and push trm-docs
+        working-directory: trm-docs
+        run: |
+          if git diff --quiet -- docs/client/btp_destination.md docs/client/assets/btp_destination; then
+            echo "BTP destination documentation is already current."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/client/btp_destination.md
+          if [ -d docs/client/assets/btp_destination ] || \
+             git ls-files --error-unmatch docs/client/assets/btp_destination >/dev/null 2>&1; then
+            git add --all -- docs/client/assets/btp_destination
+          fi
+          git commit -m "docs: sync BTP destination README"
+          git push origin HEAD:main
